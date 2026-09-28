@@ -103,6 +103,17 @@ public class Clase {
         }
     }
 
+    /** Reprograma la clase a un nuevo horario. Protege el mismo invariante que la creación. */
+    public void reprogramar(LocalDateTime nuevoHorario) {
+        if (nuevoHorario == null) {
+            throw new ReglaNegocioException("El horario de la clase es obligatorio");
+        }
+        if (nuevoHorario.isBefore(LocalDateTime.now())) {
+            throw new ReglaNegocioException("No se puede reprogramar una clase al pasado: " + nuevoHorario);
+        }
+        this.horario = nuevoHorario;
+    }
+
     /** Reasigna el entrenador de la clase, referenciando por identidad. */
     public void asignarEntrenador(Long nuevoEntrenadorId) {
         if (nuevoEntrenadorId == null) {

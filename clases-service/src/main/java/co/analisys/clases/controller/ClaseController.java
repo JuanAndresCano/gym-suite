@@ -3,6 +3,7 @@ package co.analisys.clases.controller;
 import co.analisys.clases.dto.ClaseDTO;
 import co.analisys.clases.dto.ClaseRequest;
 import co.analisys.clases.dto.InscripcionRequest;
+import co.analisys.clases.dto.ReprogramarClaseRequest;
 import co.analisys.clases.model.Clase;
 import co.analisys.clases.service.ClaseService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -75,5 +76,18 @@ public class ClaseController {
     public ClaseDTO cancelarInscripcion(@Parameter(description = "Id de la clase") @PathVariable Long id,
                                          @Parameter(description = "Id del miembro") @PathVariable Long miembroId) {
         return claseService.cancelarInscripcion(id, miembroId);
+    }
+
+    @PatchMapping("/{id}/horario")
+    @Operation(summary = "Reprogramar el horario de una clase",
+            description = "Cambia el horario de la clase y publica el cambio de forma asincrónica (RabbitMQ, exchange fanout) a los suscriptores interesados (miembros inscritos y entrenador).")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Horario actualizado exitosamente"),
+            @ApiResponse(responseCode = "400", description = "El nuevo horario está en el pasado"),
+            @ApiResponse(responseCode = "404", description = "No existe una clase con ese id")
+    })
+    public ClaseDTO reprogramarClase(@Parameter(description = "Id de la clase") @PathVariable Long id,
+                                      @RequestBody ReprogramarClaseRequest request) {
+        return claseService.reprogramarClase(id, request.getNuevoHorario());
     }
 }

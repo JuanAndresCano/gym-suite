@@ -1,16 +1,21 @@
 package co.analisys.clases.service;
 
 import co.analisys.clases.client.EntrenadorClient;
+import co.analisys.clases.config.RabbitMQConfig;
 import co.analisys.clases.dto.ClaseDTO;
 import co.analisys.clases.dto.ClaseRequest;
 import co.analisys.clases.dto.EntrenadorDTO;
 import co.analisys.clases.exception.RecursoNoEncontradoException;
+import co.analisys.clases.messaging.CambioHorarioEvent;
+import co.analisys.clases.messaging.InscripcionNotificacion;
 import co.analisys.clases.model.Clase;
 import co.analisys.clases.repository.ClaseRepository;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,6 +26,9 @@ public class ClaseService {
 
     @Autowired
     private EntrenadorClient entrenadorClient;
+
+    @Autowired
+    private RabbitTemplate rabbitTemplate;
 
     public Clase programarClase(ClaseRequest request) {
         Clase clase = new Clase(
@@ -49,7 +57,13 @@ public class ClaseService {
     public ClaseDTO inscribirMiembro(Long claseId, Long miembroId) {
         Clase clase = buscarClase(claseId);
         clase.inscribirMiembro(miembroId);
-        return aDTOConEntrenador(claseRepository.save(clase));
+        Clase guardada = claseRepository.save(clase);
+
+        rabbitTemplate.convertAndSend(
+                RabbitMQConfig.NOTIFICACIONES_INSCRIPCION_QUEUE,
+                new InscripcionNotificacion(miembroId, guardada.getId(), guardada.getNombre(), guardada.getHorario()));
+
+        return aDTOConEntrenador(guardada);
     }
 
     @Transactional
@@ -57,6 +71,26 @@ public class ClaseService {
         Clase clase = buscarClase(claseId);
         clase.cancelarInscripcion(miembroId);
         return aDTOConEntrenador(claseRepository.save(clase));
+    }
+
+    /**
+     * Reprograma el horario de una clase y publica el cambio al exchange fanout
+     * "horarios.exchange": todos los suscriptores (miembros y entrenadores)
+     * reciben la misma notificación de forma independiente.
+     */
+    @Transactional
+    public ClaseDTO reprogramarClase(Long claseId, LocalDateTime nuevoHorario) {
+        Clase clase = buscarClase(claseId);
+        LocalDateTime horarioAnterior = clase.getHorario();
+        clase.reprogramar(nuevoHorario);
+        Clase guardada = claseRepository.save(clase);
+
+        rabbitTemplate.convertAndSend(
+                RabbitMQConfig.HORARIOS_EXCHANGE,
+                "",
+                new CambioHorarioEvent(guardada.getId(), guardada.getNombre(), horarioAnterior, guardada.getHorario()));
+
+        return aDTOConEntrenador(guardada);
     }
 
     private Clase buscarClase(Long id) {
