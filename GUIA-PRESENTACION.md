@@ -417,12 +417,21 @@ inscripción, y volver a levantarlo:
 ./mvnw spring-boot:run
 ```
 
-Mostrar en el log de arranque la línea:
-`Setting offset for partition ocupacion-clases-0 to the committed offset ... offset=N`
+Mostrar en el log de arranque **dos** líneas (en este orden):
 
-"Retoma exactamente en el offset donde se quedó — ni reprocesa lo ya confirmado, ni
-pierde lo pendiente. Eso es el mecanismo de recuperación que pide la Parte 3 del
-taller, apoyado en el propio log de commits de Kafka."
+```
+Setting offset for partition ocupacion-clases-2 to the committed offset ... offset=2
+Recuperación: reanudando 'ocupacion-clases-2' desde el offset 2 (último checkpoint conocido)
+```
+
+**Qué decir:** "La primera línea es Kafka retomando por su propio commit de offset. La
+segunda es *nuestro* código: `clases-service` guarda el último offset procesado en una
+tabla `KafkaCheckpoint` en su base de datos (H2 en archivo, no en memoria — sobrevive el
+reinicio), y al reconectar, `ConsumerSeekAware` lee esa tabla y hace un seek explícito.
+Las dos coinciden, porque son dos formas independientes de resolver el mismo problema:
+no perder ni reprocesar mensajes tras una caída — una la da Kafka gratis, la otra la
+implementamos nosotros para que quede auditable en nuestra propia base de datos
+transaccional, como pide literalmente la Parte 3 del taller."
 
 > **Ensayado en vivo, timing real:** tras un `kill -9`, Kafka tarda **20-40 segundos**
 > en detectar que el consumidor murió antes de reasignar la partición al que reinicia
@@ -510,12 +519,13 @@ offset commit del broker, un consumidor que se cae no pierde ni duplica mensajes
 volver a levantarse, retoma exactamente donde se quedó.
 
 **"El mecanismo de checkpoint en base de datos que mencionan, ¿sobrevive un reinicio?"**
-Honestamente no, en este prototipo: `clases-service` usa H2 en memoria, así que la tabla
-de checkpoints se borra con el proceso. Lo que sí sobrevive y es lo que realmente importa
-es el offset commit nativo de Kafka (habilitado por el ack manual) — lo demostramos en
-vivo. Con una base de datos persistente (Postgres, por ejemplo) el checkpoint propio
-también sobreviviría, y sería redundante con el offset de Kafka salvo que quisiéramos
-guardar información adicional junto al checkpoint.
+Sí. `clases-service` usa H2 en **archivo** (no en memoria), así que la tabla
+`KafkaCheckpoint` persiste entre reinicios del proceso. Lo verificamos en vivo: matamos el
+proceso, lo reiniciamos, y el log mostró `Recuperación: reanudando 'ocupacion-clases-2'
+desde el offset 2 (último checkpoint conocido)` — nuestro propio `ConsumerSeekAware`
+leyendo la tabla, no solo el offset nativo de Kafka. Ambos mecanismos coinciden, lo cual
+es la prueba de que el checkpoint propio está funcionando correctamente en paralelo al
+commit de Kafka.
 
 ---
 

@@ -50,7 +50,9 @@ for par in $SERVICIOS; do
     for _ in $(seq 1 60); do
         # Si nuestro proceso murio, no tiene sentido seguir esperando
         if ! kill -0 "$mipid" 2>/dev/null; then break; fi
-        code=$(curl -s -o /dev/null -m 2 -w "%{http_code}" "http://localhost:$p/api/$s")
+        # /api/$s ahora exige JWT (Keycloak) y devolveria 401 aunque el servicio este OK;
+        # /v3/api-docs es publico (permitAll) y sirve igual como chequeo de salud.
+        code=$(curl -s -o /dev/null -m 2 -w "%{http_code}" "http://localhost:$p/v3/api-docs")
         [ "$code" = "200" ] && break
         sleep 1
     done
