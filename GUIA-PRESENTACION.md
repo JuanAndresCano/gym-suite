@@ -1,22 +1,59 @@
-# Guía de presentación — 15 minutos
+# Guía de presentación — 30 minutos
 
-## Antes de entrar al salón (10 min antes)
+Cubre los tres bloques del taller: Bloques 1-3 son la arquitectura DDD original
+(15 min); Bloques 4-6 son seguridad + comunicación asincrónica (15 min), que es
+lo que pide la consigna actual del taller.
+
+## Antes de entrar al salón (15 min antes)
+
+**Infraestructura compartida** (contenedores ya existentes, solo hay que levantarlos):
 
 ```bash
-cd ~/microservicios/taller-gym
+docker start biblioteca-keycloak rabbitmq
+docker compose -f docker-compose.kafka.yml up -d
+```
+
+Esperar ~15-20s a que Kafka termine de inicializar (`docker logs gym-suite-kafka-1`
+debe mostrar `started (kafka.server.KafkaServer)`).
+
+**Los cuatro microservicios:**
+
+```bash
+cd ~/microservicios/gym-suite
 ./scripts/levantar-todo.sh
 ```
 
-Espera a ver los cuatro `OK`. Luego **detén todo** con `./scripts/detener-todo.sh`.
-Esto es solo para confirmar que compila y arranca en la máquina y la red del salón —
-no quieres descubrir un puerto ocupado con la profesora mirando.
+Espera a ver los cuatro `OK`. Esto es solo para confirmar que compila y arranca en la
+máquina y la red del salón — no quieres descubrir un puerto ocupado con la profesora
+mirando. Déjalos corriendo (a diferencia de la guía original, ahora sí los necesitas
+arriba para el bloque 4-6).
+
+**Conseguir los 3 tokens de prueba de antemano** (pégalos en un bloc de notas, los vas
+a necesitar varias veces durante la demo):
+
+```bash
+get_token () {
+  curl -s -X POST http://localhost:8080/realms/gimnasio/protocol/openid-connect/token \
+    -H "Content-Type: application/x-www-form-urlencoded" \
+    -d "grant_type=password&client_id=$1&client_secret=$1-secret&username=$2&password=$3" \
+    | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])"
+}
+get_token miembros-service admin.test Admin123!     # token de ADMIN
+get_token miembros-service member.test Member123!   # token de MEMBER
+get_token clases-service trainer.test Trainer123!   # token de TRAINER
+```
 
 Ten abierto de antemano:
 
 1. El diagrama `architecture-diagram.drawio` en [app.diagrams.net](https://app.diagrams.net)
-2. Postman con las peticiones ya guardadas (o la terminal con los scripts)
-3. El editor con `Clase.java` y `EntrenadorClient.java` en pestañas
-4. Una terminal en `taller-gym`
+2. Postman con las peticiones ya guardadas (o la terminal con los scripts), incluyendo
+   los 3 tokens como variables de entorno (`token_admin`, `token_member`, `token_trainer`)
+3. Swagger UI de `miembros-service` abierto en una pestaña: `http://localhost:8081/swagger-ui/index.html`
+4. La consola de administración de Keycloak: `http://localhost:8080/admin` (realm `gimnasio`)
+5. La UI de management de RabbitMQ: `http://localhost:15672` (user `gimnasio`/`gimnasio123`)
+6. El editor con `Clase.java`, `EntrenadorClient.java`, `SecurityConfig.java` (miembros-service),
+   `RabbitMQConfig.java` (miembros-service) y `KafkaStreamsConfig.java` en pestañas
+7. Una terminal en `gym-suite`
 
 **Plan B si Postman falla:** los scripts de `scripts/` hacen exactamente lo mismo con `curl`.
 
@@ -202,6 +239,199 @@ se lo pide a `Clase`, que es quien conoce esa regla. El servicio orquesta, el ag
 **DTOs en la frontera.** La entrada llega como `ClaseRequest`, no como la entidad, para que
 Jackson nunca pueda construir un agregado saltándose sus validaciones."
 
+---
+
+## Bloque 4 — Seguridad con Keycloak (5 min)
+
+> Pantalla: consola de Keycloak, realm `gimnasio` → Users / Roles / Clients
+
+**Qué decir:** "Cada microservicio es ahora un OAuth2 Resource Server: valida el JWT
+contra el realm `gimnasio` de Keycloak y autoriza según el rol que venga en
+`realm_access.roles` del token — no según quién dice ser el llamador, sino según lo
+que el token firmado dice que puede hacer.
+
+Definimos tres roles (`ROLE_ADMIN`, `ROLE_TRAINER`, `ROLE_MEMBER`), un cliente por
+microservicio, y tres usuarios de prueba, uno por rol."
+
+### 4.1 Sin token → 401 (30s)
+
+```bash
+curl -i http://localhost:8081/api/miembros
+```
+
+"Ni siquiera puede leer sin autenticarse."
+
+### 4.2 Token de rol insuficiente → 403 (1 min)
+
+> Pantalla: Postman, header `Authorization: Bearer {{token_member}}`
+
+```
+POST http://localhost:8081/api/miembros
+{ "nombre": "Intento no autorizado", "email": "x@x.com" }
+```
+
+**Qué decir:** "`member.test` tiene un token válido y vigente — la autenticación pasa.
+Pero registrar un miembro nuevo es una operación de `ROLE_ADMIN`. La autorización lo
+rechaza con 403, no 401: sabemos quién es, simplemente no puede hacer esto."
+
+### 4.3 Token correcto → éxito (1 min)
+
+Mismo POST con `{{token_admin}}` → `201 Created`.
+
+### 4.4 El caso cruzado: seguridad entre servicios (1.5 min)
+
+> Pantalla: `RestTemplateConfig.java` en clases-service
+
+"Este es el detalle que casi se nos escapa: `clases-service` llama internamente a
+`entrenadores-service` para traer el nombre del entrenador. Si protegemos ese endpoint
+con JWT, esa llamada interna se rompe — el `RestTemplate` no tiene ningún token propio.
+
+La solución: un interceptor que **propaga** el header `Authorization` de la petición
+entrante hacia la llamada saliente. El token del usuario original sigue siendo válido
+para reenviar, porque la llamada corre en el mismo hilo de la petición HTTP."
+
+`GET /api/clases/{id}` con `{{token_admin}}` → sigue trayendo `entrenadorNombre` y
+`entrenadorEspecialidad`, a pesar de que `entrenadores-service` ahora exige JWT.
+
+### 4.5 Swagger documentado (1 min)
+
+> Pantalla: `http://localhost:8081/swagger-ui/index.html`
+
+"Cada endpoint documenta sus respuestas posibles — 200/201/400/401/403/404 — y sus
+parámetros. Esto es lo que pide la Parte 1 del taller además de la seguridad."
+
+---
+
+## Bloque 5 — RabbitMQ: comunicación asincrónica (5 min)
+
+> Pantalla: `http://localhost:15672` (RabbitMQ management), pestaña Queues
+
+**Qué decir:** "Hasta acá toda la comunicación fue síncrona: HTTP request/response.
+RabbitMQ nos deja desacoplar en el tiempo: el que publica no espera a que el que
+consume termine, ni siquiera necesita que esté vivo en ese momento."
+
+### 5.1 Notificación de inscripción (1.5 min)
+
+> Pantalla: terminal con logs de `miembros-service`
+
+```
+POST http://localhost:8082/api/clases/{id}/inscripciones   (token admin o trainer)
+{ "miembroId": 1 }
+```
+
+Mostrar en el log de miembros-service: `Notificación: el miembro 1 fue inscrito en la
+clase '...'`. "Clases-service publicó a una cola (`notificaciones.inscripciones.queue`)
+y siguió respondiendo al cliente sin esperar. Miembros-service la consumió en paralelo."
+
+### 5.2 Pub/sub de cambio de horario — el momento fanout (2 min)
+
+> Pantalla: RabbitMQ management → Exchanges → `horarios.exchange`
+
+"Acá está el patrón publish/subscribe real: un exchange **fanout** con dos colas
+independientes suscritas — una de miembros-service, otra de entrenadores-service.
+Cuando publico un mensaje, **ambas** reciben una copia, sin que el publicador sepa
+cuántos suscriptores hay ni quiénes son."
+
+```
+PATCH http://localhost:8082/api/clases/{id}/horario   (token admin o trainer)
+{ "nuevoHorario": "2026-12-01T09:00:00" }
+```
+
+Mostrar en los logs de **ambos** servicios (miembros y entrenadores) el mismo evento
+de cambio de horario llegando de forma independiente.
+
+### 5.3 Dead Letter Queue de pagos (1.5 min)
+
+> Pantalla: RabbitMQ management → Queues → `pagos-queue` / `pagos-dlq`
+
+```
+POST http://localhost:8081/api/pagos   (token admin o member)
+{ "miembroId": 1, "monto": 50000, "concepto": "Mensualidad" }
+```
+→ log: "Pago ... procesado exitosamente"
+
+```
+POST http://localhost:8081/api/pagos
+{ "miembroId": 1, "monto": -100, "concepto": "Pago corrupto" }
+```
+→ log: "Error procesando el pago ... Se envía a la DLQ" seguido de
+"Pago ... requiere atención manual"
+
+**Qué decir:** "Un monto inválido lanza una excepción que el listener convierte en
+`AmqpRejectAndDontRequeueException`. RabbitMQ, siguiendo la configuración
+`x-dead-letter-exchange`/`x-dead-letter-routing-key` de `pagos-queue`, reenvía
+automáticamente el mensaje a `pagos-dlq` en vez de perderlo o reintentarlo
+infinitamente. Un segundo listener en la DLQ lo deja registrado para atención
+manual — nada se pierde silenciosamente."
+
+---
+
+## Bloque 6 — Kafka: streaming y recuperación (5 min)
+
+### 6.1 Ocupación en tiempo real (1.5 min)
+
+> Pantalla: logs de `clases-service`
+
+Inscribir 2-3 miembros seguidos en una clase y mostrar en el log:
+
+```
+[Dashboard] Clase 'Spinning PM' (id=3): 1/3 cupos ocupados a las ...
+[Dashboard] Clase 'Spinning PM' (id=3): 2/3 cupos ocupados a las ...
+```
+
+**Qué decir:** "Cada inscripción publica al topic `ocupacion-clases`. Un consumidor
+simula la actualización de un dashboard de monitoreo en tiempo real — este es el caso
+de uso típico de Kafka: eventos de alto volumen consumidos por streaming, no por
+request/response."
+
+### 6.2 Kafka Streams: análisis de entrenamiento (2 min)
+
+> Pantalla: `KafkaStreamsConfig.java`, y una terminal con
+> `docker exec gym-suite-kafka-1 kafka-console-consumer --bootstrap-server localhost:9092 --topic resumen-entrenamiento --from-beginning`
+
+```
+POST http://localhost:8081/api/miembros/1/entrenamientos   (cualquier token)
+{ "tipoActividad": "Cardio", "duracionMinutos": 30, "calorias": 250 }
+
+POST http://localhost:8081/api/miembros/1/entrenamientos
+{ "tipoActividad": "Pesas", "duracionMinutos": 45, "calorias": 300 }
+```
+
+Mostrar en el consumer de consola el resumen agregado:
+`{"miembroId":1,"totalSesiones":2,"totalMinutos":75,"totalCalorias":550}`
+
+**Qué decir:** "No estamos consumiendo evento por evento: un stream processor de Kafka
+Streams agrupa por miembro y agrega en una ventana de tiempo de 7 días. Es
+procesamiento continuo sobre el log, no una consulta puntual a una base de datos."
+
+### 6.3 Recuperación ante fallos (1.5 min) — el momento más técnico
+
+**Qué decir:** "El consumidor de ocupación usa *ack manual*: solo confirma el mensaje
+a Kafka después de procesarlo, no automáticamente al recibirlo. Eso es lo que permite
+recuperarse de una caída sin perder ni duplicar eventos."
+
+Matar el proceso de `clases-service` en vivo (`kill -9 <pid>` o Ctrl+C) después de una
+inscripción, y volver a levantarlo:
+
+```bash
+./mvnw spring-boot:run
+```
+
+Mostrar en el log de arranque la línea:
+`Setting offset for partition ocupacion-clases-0 to the committed offset ... offset=N`
+
+"Retoma exactamente en el offset donde se quedó — ni reprocesa lo ya confirmado, ni
+pierde lo pendiente. Eso es el mecanismo de recuperación que pide la Parte 3 del
+taller, apoyado en el propio log de commits de Kafka."
+
+> **Ensayado en vivo, timing real:** tras un `kill -9`, Kafka tarda **20-40 segundos**
+> en detectar que el consumidor murió antes de reasignar la partición al que reinicia
+> (`session.timeout.ms`). No es una falla — es el protocolo de consumer groups
+> confirmando que la caída es real y no un corte momentáneo — pero avisale a tu
+> compañero de antemano para no quedarse en silencio incómodo esperando el log. Es
+> buen momento para explicarlo en voz alta mientras se espera: demuestra que entendés
+> el mecanismo, no solo que "funciona".
+
 Cierra con: **"¿Preguntas?"**
 
 ---
@@ -257,6 +487,36 @@ No lo incluimos porque el taller pedía máximo cuatro microservicios y son comp
 infraestructura, no contextos de dominio. En producción irían delante: el gateway como único
 punto de entrada, y discovery para no tener el `localhost:8083` en configuración.
 
+**"¿Cómo saben qué rol tiene el usuario si Spring Security no conoce Keycloak?"**
+El JWT firmado por Keycloak trae el claim `realm_access.roles`. Configuramos un
+`JwtAuthenticationConverter` que lee ese claim y lo convierte en `GrantedAuthority` de
+Spring Security — no hay llamada adicional a Keycloak en cada request, todo lo necesario
+ya viene firmado en el token.
+
+**"¿Por qué RabbitMQ para notificaciones/horarios y Kafka para ocupación/entrenamiento,
+y no todo con una sola tecnología?"**
+Son patrones distintos. RabbitMQ brilla en mensajería con enrutamiento flexible y
+garantías por mensaje (colas, DLQ, fanout) — encaja con "notificar a alguien" o
+"garantizar que un pago se procese o quede registrado como fallido". Kafka brilla en
+streams de eventos de alto volumen que se pueden re-leer y agregar con el tiempo — encaja
+con "monitorear ocupación en tiempo real" o "analizar historial de entrenamiento". Usar
+ambos demuestra que entendemos cuándo aplica cada una, no que eran intercambiables.
+
+**"¿Qué pasa si RabbitMQ o Kafka se caen?"**
+Con RabbitMQ, el publicador (`RabbitTemplate.convertAndSend`) lanzaría una excepción si
+no puede conectar — habría que decidir si la petición HTTP falla o se degrada
+(como con el cliente HTTP a entrenadores-service). Con Kafka, gracias al ack manual y al
+offset commit del broker, un consumidor que se cae no pierde ni duplica mensajes: al
+volver a levantarse, retoma exactamente donde se quedó.
+
+**"El mecanismo de checkpoint en base de datos que mencionan, ¿sobrevive un reinicio?"**
+Honestamente no, en este prototipo: `clases-service` usa H2 en memoria, así que la tabla
+de checkpoints se borra con el proceso. Lo que sí sobrevive y es lo que realmente importa
+es el offset commit nativo de Kafka (habilitado por el ack manual) — lo demostramos en
+vivo. Con una base de datos persistente (Postgres, por ejemplo) el checkpoint propio
+también sobreviviría, y sería redundante con el offset de Kafka salvo que quisiéramos
+guardar información adicional junto al checkpoint.
+
 ---
 
 ## Peticiones para Postman
@@ -309,13 +569,17 @@ http://localhost:8084/api/equipos
 
 ---
 
-## Reparto sugerido
+## Reparto sugerido (30 min)
 
 | Bloque | Minutos | Quién |
 |---|---|---|
 | 1. Arquitectura y decisión `entrenadorId` | 3 | Quien mejor domine DDD |
-| 2. Demo en vivo | 9 | Quien tenga el proyecto en su máquina |
-| 3. Cierre DDD y preguntas | 3 | Ambos |
+| 2. Demo en vivo (DDD) | 9 | Quien tenga el proyecto en su máquina |
+| 3. Cierre DDD | 3 | Ambos |
+| 4. Seguridad con Keycloak | 5 | Quien implementó Security |
+| 5. RabbitMQ | 5 | Quien implementó la mensajería |
+| 6. Kafka | 5 | Quien implementó streaming/Kafka |
 
 **Los dos deben poder responder sobre cualquier servicio**, no solo el que programaron. La
-pregunta cruzada es el riesgo más probable.
+pregunta cruzada es el riesgo más probable — y con seis bloques distintos, es todavía
+más probable que te pregunten por un bloque que no presentaste vos.
