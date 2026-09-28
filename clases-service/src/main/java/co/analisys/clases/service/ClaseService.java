@@ -10,6 +10,7 @@ import co.analisys.clases.messaging.CambioHorarioEvent;
 import co.analisys.clases.messaging.InscripcionNotificacion;
 import co.analisys.clases.model.Clase;
 import co.analisys.clases.repository.ClaseRepository;
+import co.analisys.clases.streaming.OcupacionClaseProducer;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,9 @@ public class ClaseService {
 
     @Autowired
     private RabbitTemplate rabbitTemplate;
+
+    @Autowired
+    private OcupacionClaseProducer ocupacionClaseProducer;
 
     public Clase programarClase(ClaseRequest request) {
         Clase clase = new Clase(
@@ -62,6 +66,8 @@ public class ClaseService {
         rabbitTemplate.convertAndSend(
                 RabbitMQConfig.NOTIFICACIONES_INSCRIPCION_QUEUE,
                 new InscripcionNotificacion(miembroId, guardada.getId(), guardada.getNombre(), guardada.getHorario()));
+        ocupacionClaseProducer.actualizarOcupacion(
+                guardada.getId(), guardada.getNombre(), guardada.getTotalInscritos(), guardada.getCapacidadMaxima());
 
         return aDTOConEntrenador(guardada);
     }
@@ -70,7 +76,12 @@ public class ClaseService {
     public ClaseDTO cancelarInscripcion(Long claseId, Long miembroId) {
         Clase clase = buscarClase(claseId);
         clase.cancelarInscripcion(miembroId);
-        return aDTOConEntrenador(claseRepository.save(clase));
+        Clase guardada = claseRepository.save(clase);
+
+        ocupacionClaseProducer.actualizarOcupacion(
+                guardada.getId(), guardada.getNombre(), guardada.getTotalInscritos(), guardada.getCapacidadMaxima());
+
+        return aDTOConEntrenador(guardada);
     }
 
     /**

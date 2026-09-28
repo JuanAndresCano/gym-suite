@@ -1,7 +1,7 @@
 version: '3'
 services:
   zookeeper:
-    image: confluentinc/cp-zookeeper:latest
+    image: confluentinc/cp-zookeeper:7.6.1
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -9,7 +9,9 @@ services:
       - 22181:2181
 
   kafka:
-    image: confluentinc/cp-kafka:latest
+    # Fijado a 7.6.1: el tag "latest" saltó a una versión que solo soporta modo
+    # KRaft (sin Zookeeper) y rompe la configuración de este tutorial.
+    image: confluentinc/cp-kafka:7.6.1
     depends_on:
       - zookeeper
     ports:
