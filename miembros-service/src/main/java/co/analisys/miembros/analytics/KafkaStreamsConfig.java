@@ -1,6 +1,7 @@
 package co.analisys.miembros.analytics;
 
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -33,7 +34,11 @@ public class KafkaStreamsConfig {
 
     @Bean
     public NewTopic datosEntrenamientoTopic() {
-        return TopicBuilder.name(DATOS_ENTRENAMIENTO_TOPIC).partitions(1).replicas(1).build();
+        return TopicBuilder.name(DATOS_ENTRENAMIENTO_TOPIC)
+                .partitions(3)
+                .replicas(1)
+                .config(TopicConfig.RETENTION_MS_CONFIG, "1209600000") // 14 días
+                .build();
     }
 
     @Bean

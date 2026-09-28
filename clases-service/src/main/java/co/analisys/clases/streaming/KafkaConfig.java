@@ -1,6 +1,7 @@
 package co.analisys.clases.streaming;
 
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.common.config.TopicConfig;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
@@ -14,8 +15,9 @@ public class KafkaConfig {
     @Bean
     public NewTopic ocupacionClasesTopic() {
         return TopicBuilder.name(OcupacionClaseProducer.TOPIC)
-                .partitions(1)
+                .partitions(3)
                 .replicas(1)
+                .config(TopicConfig.RETENTION_MS_CONFIG, "604800000") // 7 días
                 .build();
     }
 
