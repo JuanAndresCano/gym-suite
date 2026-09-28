@@ -1,0 +1,8 @@
+# Salida de compilacion
+target/
+
+# Logs de los scripts
+logs/
+
+# Metadatos que Windows pega a los archivos descargados y WSL muestra sueltos
+*:Zone.Identifier

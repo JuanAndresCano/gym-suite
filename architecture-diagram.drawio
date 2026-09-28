@@ -1,0 +1,100 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Página-1" id="7-Rz087-WasCPVCIMRFR">
+    <mxGraphModel dx="1030" dy="562" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="cliente" parent="1" style="shape=umlActor;whiteSpace=wrap;html=1;verticalLabelPosition=bottom;verticalAlign=top;outlineConnect=0;fontSize=13;" value="Cliente (Postman)" vertex="1">
+          <mxGeometry height="80" width="60" x="395" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="miembros" parent="1" style="shape=component;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;" value="&amp;laquo;component&amp;raquo;&lt;br&gt;&lt;b&gt;Miembros&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;:8081 · /api/miembros&lt;/font&gt;" vertex="1">
+          <mxGeometry height="70" width="170" x="40" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="clases" parent="1" style="shape=component;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;" value="&amp;laquo;component&amp;raquo;&lt;br&gt;&lt;b&gt;Clases&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;:8082 · /api/clases&lt;/font&gt;" vertex="1">
+          <mxGeometry height="70" width="170" x="240" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="entrenadores" parent="1" style="shape=component;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;" value="&amp;laquo;component&amp;raquo;&lt;br&gt;&lt;b&gt;Entrenadores&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;:8083 · /api/entrenadores&lt;/font&gt;" vertex="1">
+          <mxGeometry height="70" width="170" x="440" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="equipos" parent="1" style="shape=component;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;" value="&amp;laquo;component&amp;raquo;&lt;br&gt;&lt;b&gt;Equipos&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;:8084 · /api/equipos&lt;/font&gt;" vertex="1">
+          <mxGeometry height="70" width="170" x="640" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="db_miembros" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#b0e3e6;strokeColor=#0b8299;fontSize=13;" value="&amp;laquo;database&amp;raquo;&lt;br&gt;&lt;b&gt;miembrosdb&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 10px;&quot;&gt;H2 en memoria&lt;/font&gt;" vertex="1">
+          <mxGeometry height="70" width="170" x="40" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="db_clases" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#b0e3e6;strokeColor=#0b8299;fontSize=13;" value="&amp;laquo;database&amp;raquo;&lt;br&gt;&lt;b&gt;clasesdb&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 10px;&quot;&gt;H2 en memoria&lt;/font&gt;" vertex="1">
+          <mxGeometry height="70" width="170" x="240" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="db_entrenadores" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#b0e3e6;strokeColor=#0b8299;fontSize=13;" value="&amp;laquo;database&amp;raquo;&lt;br&gt;&lt;b&gt;entrenadoresdb&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 10px;&quot;&gt;H2 en memoria&lt;/font&gt;" vertex="1">
+          <mxGeometry height="70" width="170" x="440" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="db_equipos" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#b0e3e6;strokeColor=#0b8299;fontSize=13;" value="&amp;laquo;database&amp;raquo;&lt;br&gt;&lt;b&gt;equiposdb&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 10px;&quot;&gt;H2 en memoria&lt;/font&gt;" vertex="1">
+          <mxGeometry height="70" width="170" x="640" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" value="HTTP/REST" edge="1" parent="1" source="cliente" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=9;" target="miembros">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="HTTP/REST" edge="1" parent="1" source="cliente" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=9;" target="clases">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="HTTP/REST" edge="1" parent="1" source="cliente" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=9;" target="entrenadores">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="HTTP/REST" edge="1" parent="1" source="cliente" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=9;" target="equipos">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="JDBC" edge="1" parent="1" source="miembros" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=9;" target="db_miembros">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="JDBC" edge="1" parent="1" source="clases" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=9;" target="db_clases">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="JDBC" edge="1" parent="1" source="entrenadores" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=9;" target="db_entrenadores">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" value="JDBC" edge="1" parent="1" source="equipos" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;fontSize=9;" target="db_equipos">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" edge="1" parent="1" source="clases" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;fontSize=11;" target="entrenadores" value="REST&lt;br&gt;GET /api/entrenadores/{id}">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="titulo" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=18;fontStyle=1;" value="Sistema de Gestión de un Gimnasio — Arquitectura de Microservicios" vertex="1">
+          <mxGeometry height="30" width="740" x="40" y="-70" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitulo" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=12;fontColor=#666666;" value="Diagrama de componentes UML · 4 contextos acotados · una base de datos por servicio" vertex="1">
+          <mxGeometry height="20" width="740" x="40" y="-42" as="geometry" />
+        </mxCell>
+        <mxCell id="leyenda_caja" parent="1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#999999;dashed=1;verticalAlign=top;align=left;spacingLeft=8;spacingTop=6;fontSize=11;fontStyle=1" value="Leyenda" vertex="1">
+          <mxGeometry height="150" width="290" x="40" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="leyenda_c" parent="1" style="shape=component;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=10;" value="«component»" vertex="1">
+          <mxGeometry height="34" width="96" x="52" y="496" as="geometry" />
+        </mxCell>
+        <mxCell id="leyenda_ct" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" value="Microservicio independiente&#10;(bounded context)" vertex="1">
+          <mxGeometry height="34" width="160" x="158" y="496" as="geometry" />
+        </mxCell>
+        <mxCell id="leyenda_d" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=8;fillColor=#b0e3e6;strokeColor=#0b8299;fontSize=10;" value="«database»" vertex="1">
+          <mxGeometry height="36" width="96" x="52" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="leyenda_dt" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" value="Base de datos privada&#10;del servicio (H2)" vertex="1">
+          <mxGeometry height="36" width="160" x="158" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="leyenda_l1" style="endArrow=classic;html=1;rounded=0;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="56" y="592" as="sourcePoint" /><mxPoint x="140" y="592" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="leyenda_l1t" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" value="Llamada síncrona" vertex="1">
+          <mxGeometry height="20" width="160" x="158" y="582" as="geometry" />
+        </mxCell>
+        <mxCell id="leyenda_l2" style="endArrow=classic;html=1;rounded=0;dashed=1;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry"><mxPoint x="56" y="608" as="sourcePoint" /><mxPoint x="140" y="608" as="targetPoint" /></mxGeometry>
+        </mxCell>
+        <mxCell id="leyenda_l2t" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;" value="Dependencia entre contextos" vertex="1">
+          <mxGeometry height="20" width="160" x="158" y="598" as="geometry" />
+        </mxCell>
+        <mxCell id="nota" parent="1" style="shape=note;whiteSpace=wrap;html=1;size=14;fillColor=#fff2cc;strokeColor=#d6b656;align=left;spacingLeft=6;fontSize=10;verticalAlign=top;spacingTop=4;" value="Clase referencia al Entrenador por identidad (entrenadorId), no por objeto: son bases de datos distintas y no existe JOIN entre contextos." vertex="1">
+          <mxGeometry height="90" width="200" x="360" y="470" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
