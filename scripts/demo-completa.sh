@@ -41,17 +41,18 @@ titulo "PASO 1 -- Levantar los 4 microservicios"
 ./scripts/levantar-todo.sh || { echo "Revisa los logs antes de seguir."; exit 1; }
 
 # ============================================================================
-titulo "PASO 2 -- Obtener los 3 tokens de prueba"
+titulo "PASO 2 -- Obtener los tokens de prueba"
 # ============================================================================
 TOKEN_ADMIN_MIEMBROS=$(get_token miembros-service admin.test Admin123!)
 TOKEN_ADMIN_CLASES=$(get_token clases-service admin.test Admin123!)
 TOKEN_ADMIN_ENTRENADORES=$(get_token entrenadores-service admin.test Admin123!)
+TOKEN_ADMIN_EQUIPOS=$(get_token equipos-service admin.test Admin123!)
 TOKEN_MEMBER_MIEMBROS=$(get_token miembros-service member.test Member123!)
 TOKEN_TRAINER_CLASES=$(get_token clases-service trainer.test Trainer123!)
 
 for par in "admin/miembros:$TOKEN_ADMIN_MIEMBROS" "admin/clases:$TOKEN_ADMIN_CLASES" \
-           "admin/entrenadores:$TOKEN_ADMIN_ENTRENADORES" "member/miembros:$TOKEN_MEMBER_MIEMBROS" \
-           "trainer/clases:$TOKEN_TRAINER_CLASES"; do
+           "admin/entrenadores:$TOKEN_ADMIN_ENTRENADORES" "admin/equipos:$TOKEN_ADMIN_EQUIPOS" \
+           "member/miembros:$TOKEN_MEMBER_MIEMBROS" "trainer/clases:$TOKEN_TRAINER_CLASES"; do
     nombre="${par%%:*}"; tok="${par#*:}"
     if [ -z "$tok" ]; then echo "  FALLO obteniendo token $nombre -- revisa que Keycloak tenga el realm 'gimnasio'"; exit 1; fi
     printf "  OK token %-20s (%s...)\n" "$nombre" "${tok:0:20}"
@@ -69,7 +70,7 @@ pausa
 titulo "BLOQUE 2.2 -- Los 4 servicios responden de forma independiente"
 # ============================================================================
 for par in "miembros:8081:$TOKEN_ADMIN_MIEMBROS" "clases:8082:$TOKEN_ADMIN_CLASES" \
-           "entrenadores:8083:$TOKEN_ADMIN_ENTRENADORES"; do
+           "entrenadores:8083:$TOKEN_ADMIN_ENTRENADORES" "equipos:8084:$TOKEN_ADMIN_EQUIPOS"; do
     s="${par%%:*}"; rest="${par#*:}"; p="${rest%%:*}"; tok="${rest#*:}"
     printf "  GET /api/%-14s -> HTTP %s\n" "$s" "$(codigo -H "Authorization: Bearer $tok" http://localhost:$p/api/$s)"
 done
@@ -97,6 +98,25 @@ for m in 1 2 3; do
         -H "Authorization: Bearer $TOKEN_ADMIN_CLASES" -H "Content-Type: application/json" \
         -d "{\"miembroId\":$m}" | json
 done
+pausa
+
+# ============================================================================
+titulo "BLOQUE 4.0 -- Que hay adentro de un token (decodificado, sin salir de la maquina)"
+# ============================================================================
+echo "Token de admin.test, decodificado localmente (NUNCA lo pegues en jwt.io en vivo):"
+echo "$TOKEN_ADMIN_MIEMBROS" | cut -d. -f2 | tr '_-' '/+' | python3 -c "
+import sys, base64, json
+payload = sys.stdin.read().strip()
+payload += '=' * (-len(payload) % 4)
+claims = json.loads(base64.b64decode(payload))
+interesantes = {k: claims[k] for k in ('iss', 'azp', 'realm_access', 'exp') if k in claims}
+print(json.dumps(interesantes, indent=2, ensure_ascii=False))
+"
+echo ""
+echo "Fijate: 'azp' (quien lo pidio) es 'miembros-service', pero el rol viaja adentro"
+echo "del propio token, firmado. Cualquier servicio que confie en el mismo 'iss' puede"
+echo "leerlo sin volver a preguntarle nada a Keycloak -- por eso no hace falta loguearse"
+echo "una vez por cada microservicio."
 pausa
 
 # ============================================================================
@@ -169,6 +189,8 @@ pausa
 # ============================================================================
 titulo "BLOQUE 6.1 -- Kafka: ocupacion en tiempo real"
 # ============================================================================
+echo "Mostrar opcionalmente en el navegador: http://localhost:8090 (Kafka UI, topic ocupacion-clases)"
+echo ""
 echo "Log de clases-service (dashboard de ocupacion, ya disparado por las inscripciones de arriba):"
 grep -i "Dashboard" logs/clases.log | tail -5
 pausa
@@ -182,7 +204,10 @@ curl -s -X POST http://localhost:8081/api/miembros/1/entrenamientos \
 curl -s -X POST http://localhost:8081/api/miembros/1/entrenamientos \
     -H "Authorization: Bearer $TOKEN_ADMIN_MIEMBROS" -H "Content-Type: application/json" \
     -d '{"tipoActividad":"Pesas","duracionMinutos":45,"calorias":300}' >/dev/null
-echo "2 sesiones de entrenamiento publicadas. Ultimo resumen agregado (topic resumen-entrenamiento):"
+echo "2 sesiones de entrenamiento publicadas."
+echo "Mostrar ahora en el navegador: http://localhost:8090 -> Topics -> resumen-entrenamiento -> Messages"
+echo ""
+echo "Ultimo resumen agregado por consola (plan B si Kafka UI no carga):"
 echo "(el topic conserva corridas anteriores del taller -- por eso pedimos solo la ultima linea;"
 echo " si el contador no arranca en 2 es porque ya habia datos previos, es esperado)"
 docker exec gym-suite-kafka-1 kafka-console-consumer --bootstrap-server localhost:9092 \

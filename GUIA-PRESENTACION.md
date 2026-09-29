@@ -51,9 +51,11 @@ Ten abierto de antemano:
 3. Swagger UI de `miembros-service` abierto en una pestaña: `http://localhost:8081/swagger-ui/index.html`
 4. La consola de administración de Keycloak: `http://localhost:8080/admin` (realm `gimnasio`)
 5. La UI de management de RabbitMQ: `http://localhost:15672` (user `gimnasio`/`gimnasio123`)
-6. El editor con `Clase.java`, `EntrenadorClient.java`, `SecurityConfig.java` (miembros-service),
+6. Kafka UI: `http://localhost:8090` (sin login) — panel visual de topics, particiones y
+   mensajes, equivalente al management de RabbitMQ (Kafka no trae uno propio de fábrica)
+7. El editor con `Clase.java`, `EntrenadorClient.java`, `SecurityConfig.java` (miembros-service),
    `RabbitMQConfig.java` (miembros-service) y `KafkaStreamsConfig.java` en pestañas
-7. Una terminal en `gym-suite`
+8. Una terminal en `gym-suite`
 
 **Plan B si Postman falla:** los scripts de `scripts/` hacen exactamente lo mismo con `curl`.
 
@@ -253,6 +255,36 @@ que el token firmado dice que puede hacer.
 Definimos tres roles (`ROLE_ADMIN`, `ROLE_TRAINER`, `ROLE_MEMBER`), un cliente por
 microservicio, y tres usuarios de prueba, uno por rol."
 
+### 4.0 Qué hay adentro del token (30s) — respuesta anticipada a "¿me logueo 4 veces?"
+
+> Pantalla: terminal
+
+```bash
+echo $TOKEN_ADMIN_MIEMBROS | cut -d. -f2 | tr '_-' '/+' | python3 -c "
+import sys, base64, json
+payload = sys.stdin.read().strip(); payload += '=' * (-len(payload) % 4)
+claims = json.loads(base64.b64decode(payload))
+print(json.dumps({k: claims[k] for k in ('iss','azp','realm_access','exp') if k in claims}, indent=2))
+"
+```
+
+**Deberías ver** algo como:
+```json
+{
+  "iss": "http://localhost:8080/realms/gimnasio",
+  "azp": "miembros-service",
+  "realm_access": { "roles": ["ROLE_ADMIN", "..."] },
+  "exp": 1790647153
+}
+```
+
+**Qué decir:** "El rol viaja firmado *adentro* del token, no en una tabla que cada
+servicio consulta por separado. Por eso no hace falta loguearse una vez por cada
+microservicio: cualquiera que confíe en el mismo `iss` puede leer este mismo token."
+
+**Nota**: nunca pegues un token real en jwt.io frente a la clase — es un sitio de
+terceros. El comando de arriba decodifica todo localmente, sin salir de tu máquina.
+
 ### 4.1 Sin token → 401 (30s)
 
 ```bash
@@ -370,7 +402,10 @@ manual — nada se pierde silenciosamente."
 
 ### 6.1 Ocupación en tiempo real (1.5 min)
 
-> Pantalla: logs de `clases-service`
+> Pantalla: logs de `clases-service` (el mensaje en sí se ve mejor ahí que en Kafka UI,
+> que solo muestra el JSON crudo). Opcional: mostrar primero en Kafka UI
+> (`http://localhost:8090` → Topics → `ocupacion-clases`) que el topic existe con sus
+> 3 particiones, antes de mostrar el log real.
 
 Inscribir 2-3 miembros seguidos en una clase y mostrar en el log:
 
@@ -386,8 +421,9 @@ request/response."
 
 ### 6.2 Kafka Streams: análisis de entrenamiento (2 min)
 
-> Pantalla: `KafkaStreamsConfig.java`, y una terminal con
-> `docker exec gym-suite-kafka-1 kafka-console-consumer --bootstrap-server localhost:9092 --topic resumen-entrenamiento --from-beginning`
+> Pantalla: `KafkaStreamsConfig.java`, y **Kafka UI** (`http://localhost:8090`) en la
+> pestaña Topics → `resumen-entrenamiento` → Messages (más visual que la consola para
+> la demo en vivo; la consola queda como plan B si Kafka UI no carga).
 
 ```
 POST http://localhost:8081/api/miembros/1/entrenamientos   (cualquier token)
@@ -397,8 +433,14 @@ POST http://localhost:8081/api/miembros/1/entrenamientos
 { "tipoActividad": "Pesas", "duracionMinutos": 45, "calorias": 300 }
 ```
 
-Mostrar en el consumer de consola el resumen agregado:
+Mostrar en Kafka UI el resumen agregado apareciendo en `resumen-entrenamiento`:
 `{"miembroId":1,"totalSesiones":2,"totalMinutos":75,"totalCalorias":550}`
+
+Plan B por consola si hace falta:
+```bash
+docker exec gym-suite-kafka-1 kafka-console-consumer --bootstrap-server localhost:9092 \
+  --topic resumen-entrenamiento --from-beginning --property print.key=true
+```
 
 **Qué decir:** "No estamos consumiendo evento por evento: un stream processor de Kafka
 Streams agrupa por miembro y agrega en una ventana de tiempo de 7 días. Es

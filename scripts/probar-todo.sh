@@ -1,7 +1,18 @@
 #!/usr/bin/env bash
-# Bateria de pruebas de los 4 microservicios. Requiere los 4 corriendo.
+# Bateria de pruebas SIN TOKEN de los 4 microservicios. Requiere los 4 corriendo.
+#
+# A proposito no manda Authorization: esto demuestra el "antes" (como se
+# comportaba el sistema sin seguridad) contra el "ahora" (todo bloqueado con
+# 401 salvo lo que quedo publico). Para la demo CON seguridad y tokens, usa
+# ./scripts/demo-completa.sh en su lugar.
+#
 # Uso: ./scripts/probar-todo.sh
 set -u
+
+echo "NOTA: este script no manda ningun token a proposito -- es para mostrar"
+echo "      que Keycloak ahora bloquea todo por defecto. Los 401 son el punto,"
+echo "      no un error. Para probar con token usa ./scripts/demo-completa.sh"
+echo ""
 
 json() { python3 -m json.tool 2>/dev/null || cat; }
 titulo() { echo ""; echo "=============================================================="; echo "  $1"; echo "=============================================================="; }
@@ -62,18 +73,40 @@ echo "consultando por HTTP a entrenadores-service (8083):"
 curl -s http://localhost:8082/api/clases | json
 
 titulo "6. INVARIANTE DE CAPACIDAD -- el Aggregate Root protege su regla"
-CLASE=$(curl -s http://localhost:8082/api/clases | python3 -c \
-  "import sys,json; print([c['id'] for c in json.load(sys.stdin) if c['capacidadMaxima']==2][-1])")
-echo "Clase id=$CLASE con capacidadMaxima=2. Inscribimos tres miembros:"
-for m in 1 2 3; do
-    echo "-- inscribir miembro $m --"
+CLASE=$(curl -s http://localhost:8082/api/clases | python3 -c "
+import sys, json
+try:
+    ids = [c['id'] for c in json.load(sys.stdin) if c.get('capacidadMaxima') == 2]
+    print(ids[-1] if ids else '')
+except Exception:
+    print('')
+")
+if [ -z "$CLASE" ]; then
+    echo "No se pudo obtener una clase de capacidad 2 -- la seccion 4 fue bloqueada por"
+    echo "seguridad (401), asi que no hay ninguna clase creada para probar el invariante."
+    echo "Esto es exactamente lo esperado sin token: se salta el resto de esta seccion."
+else
+    echo "Clase id=$CLASE con capacidadMaxima=2. Inscribimos tres miembros:"
+    for m in 1 2 3; do
+        echo "-- inscribir miembro $m --"
+        curl -s -X POST "http://localhost:8082/api/clases/$CLASE/inscripciones" \
+          -H 'Content-Type: application/json' -d "{\"miembroId\":$m}" \
+          | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    if 'totalInscritos' in d:
+        print('  OK  inscritos:', d['totalInscritos'], 'cupos:', d['cuposDisponibles'])
+    else:
+        print('  RECHAZADO:', d.get('error'))
+except Exception:
+    print('  BLOQUEADO por seguridad (401/403)')
+"
+    done
+    echo "-- inscribir de nuevo al miembro 1 (espera rechazo por duplicado) --"
     curl -s -X POST "http://localhost:8082/api/clases/$CLASE/inscripciones" \
-      -H 'Content-Type: application/json' -d "{\"miembroId\":$m}" \
-      | python3 -c "import sys,json; d=json.load(sys.stdin); print('  OK  inscritos:',d['totalInscritos'],'cupos:',d['cuposDisponibles']) if 'totalInscritos' in d else print('  RECHAZADO:',d.get('error'))"
-done
-echo "-- inscribir de nuevo al miembro 1 (espera rechazo por duplicado) --"
-curl -s -X POST "http://localhost:8082/api/clases/$CLASE/inscripciones" \
-  -H 'Content-Type: application/json' -d '{"miembroId":1}' | json
+      -H 'Content-Type: application/json' -d '{"miembroId":1}' | json
+fi
 
 titulo "RESUMEN"
 for par in miembros:8081 clases:8082 entrenadores:8083 equipos:8084; do
@@ -82,5 +115,6 @@ for par in miembros:8081 clases:8082 entrenadores:8083 equipos:8084; do
     printf "  %-14s puerto %s   registros: %s\n" "$s" "$p" "$n"
 done
 echo ""
-echo "Los 4 servicios respondieron simultaneamente, cada uno contra su propia base de datos,"
-echo "y cada agregado rechazo las operaciones que violaban sus invariantes."
+echo "Los 401 de arriba son el resultado esperado: sin token, Keycloak bloquea todo."
+echo "Para ver los mismos invariantes DDD pero pasando (con token), corre:"
+echo "  ./scripts/demo-completa.sh"
