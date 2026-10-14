@@ -148,7 +148,9 @@ taller-gym/
 ├── miembros-service/               # Puerto 8081
 ├── clases-service/                 # Puerto 8082
 ├── entrenadores-service/           # Puerto 8083
-└── equipos-service/                # Puerto 8084
+├── equipos-service/                # Puerto 8084
+├── api-gateway/                    # Puerto 8085 — punto de entrada único (Spring Cloud Gateway)
+└── eureka-server/                  # Puerto 8761 — registro y descubrimiento de servicios (Eureka)
 ```
 
 Cada servicio es un proyecto Maven **independiente** (su propio `pom.xml` y su propio
@@ -197,6 +199,9 @@ cd equipos-service && ./mvnw spring-boot:run
 > clases-service** y crear primero al menos un entrenador, para tener un `entrenadorId`
 > real al que referenciar.
 
+> `./scripts/levantar-todo.sh` levanta **solo los 4 servicios**. `eureka-server` y `api-gateway`
+> se arrancan aparte (ver [API Gateway y Eureka](#api-gateway-y-eureka)).
+
 Consola H2 de cada servicio: `http://localhost:<puerto>/h2-console`
 
 ## 7. Endpoints
@@ -224,6 +229,61 @@ las operaciones de negocio que hacen falta para que los agregados protejan sus i
 
 Cuando una operación viola un invariante, el `@RestControllerAdvice` de cada servicio responde
 **400** con el mensaje de la regla; un recurso inexistente responde **404**.
+
+## API Gateway y Eureka
+
+![Arquitectura con API Gateway](arquitectura-api-gateway.png)
+
+Los clientes entran por un único punto, el **API Gateway** (Spring Cloud Gateway, puerto **8085**), que valida
+el JWT de Keycloak y enruta a los servicios descubiertos por **Eureka** (puerto **8761**). Los servicios siguen
+siendo accesibles en sus puertos y siguen validando el JWT por su cuenta. Detalle completo en
+[`api-gateway/README.md`](api-gateway/README.md); diagrama editable en `arquitectura-api-gateway.drawio`.
+
+**Orden de arranque**
+
+1. Docker: Keycloak, RabbitMQ y Kafka (con Zookeeper).
+2. `eureka-server`
+3. Los 4 servicios (`miembros`, `clases`, `entrenadores`, `equipos`).
+4. `api-gateway`
+
+Cada uno con `./mvnw spring-boot:run` desde su carpeta. Después de arrancar, esperar **30 a 60 s**: el gateway
+descarga el registro de Eureka de forma periódica y hasta entonces puede responder `503`.
+Dashboard de Eureka: <http://localhost:8761>.
+
+**Rutas**
+
+| Ruta | Destino |
+|---|---|
+| `/api/miembros/**`, `/api/pagos/**` | `lb://miembros-service` |
+| `/api/clases/**` | `lb://clases-service` |
+| `/api/entrenadores/**` | `lb://entrenadores-service` |
+| `/api/equipos/**` | `lb://equipos-service` (definida en `GatewayConfig`, Java DSL) |
+| `/api/resumen/miembros/{id}` | filtro `ResumenMiembro` (responde el propio gateway) |
+
+**Seguridad**
+
+- Sin token: **401**, salvo `/actuator/health` y `/actuator/info`, que son públicos.
+- Rol insuficiente: **403**, respondido por el gateway sin llegar al servicio. Las reglas replican las de los
+  servicios (por ejemplo `POST /api/miembros` solo ADMIN; `POST /api/pagos` ADMIN o MEMBER; el resto, autenticado).
+- El header `Authorization` se reenvía intacto al servicio.
+
+**Agregación:** `GET /api/resumen/miembros/{id}` (cualquier usuario autenticado) devuelve el miembro, sus clases,
+sus pagos, `totalClases`, `totalPagado` y una lista `advertencias`. Si fallan las clases o los pagos responde `200`
+con esa sección en `null` y la advertencia correspondiente; un miembro inexistente da `404`.
+
+**Pruebas end-to-end** (PowerShell, con todo arriba, desde la raíz del repo):
+
+```
+powershell -File scripts\test-gateway.ps1
+```
+
+Para el caso de degradación del resumen, detener `clases-service` y correr solo ese caso:
+
+```
+powershell -File scripts\test-gateway.ps1 -Degradado
+```
+
+Las pruebas automáticas del gateway (sin Keycloak ni servicios): `cd api-gateway && ./mvnw test`.
 
 ## 8. Pruebas realizadas
 
@@ -254,7 +314,7 @@ Con los cuatro servicios corriendo simultáneamente (`./scripts/probar-todo.sh`)
 
 | Script | Qué hace |
 |---|---|
-| `./scripts/levantar-todo.sh` | Compila lo que falte y arranca los 4 en segundo plano |
+| `./scripts/levantar-todo.sh` | Compila lo que falte y arranca los 4 servicios en segundo plano (no incluye Eureka ni el gateway) |
 | `./scripts/probar-todo.sh` | Batería completa, incluidos los invariantes |
 | `./scripts/probar-resiliencia.sh` | Apaga entrenadores y prueba que Clases sobrevive |
 | `./scripts/detener-todo.sh` | Detiene los 4 servicios |

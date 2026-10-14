@@ -28,6 +28,10 @@ máquina y la red del salón — no quieres descubrir un puerto ocupado con la p
 mirando. Déjalos corriendo (a diferencia de la guía original, ahora sí los necesitas
 arriba para el bloque 4-6).
 
+> `levantar-todo.sh` arranca solo los cuatro servicios. Para mostrar el API Gateway hay que
+> arrancar aparte `eureka-server` (8761) y, al final, `api-gateway` (8085), y esperar 30-60 s
+> a que el gateway vea los servicios. Ver el README de la raíz, sección "API Gateway y Eureka".
+
 **Conseguir los 3 tokens de prueba de antemano** (pégalos en un bloc de notas, los vas
 a necesitar varias veces durante la demo):
 
@@ -534,9 +538,17 @@ Los otros tres siguen funcionando — lo mostramos: cuando apagamos entrenadores
 respondieron 200. Ninguno depende de otro para arrancar.
 
 **"¿Dónde está el API Gateway / service discovery?"**
-No lo incluimos porque el taller pedía máximo cuatro microservicios y son componentes de
-infraestructura, no contextos de dominio. En producción irían delante: el gateway como único
-punto de entrada, y discovery para no tener el `localhost:8083` en configuración.
+Ya están incluidos. El **API Gateway** es Spring Cloud Gateway en el puerto 8085 y es el punto de
+entrada único; **Eureka** corre en el 8761 y los cuatro servicios se registran con su nombre. Las rutas
+del gateway usan `lb://miembros-service`, `lb://clases-service`, etc., así que ya no hay un
+`localhost:8083` fijo y, si hay dos instancias de un servicio, el balanceador las alterna (lo
+demostramos con dos instancias de entrenadores en los puertos 8083 y 8093).
+La seguridad también se aplica en el gateway: valida el JWT de Keycloak, responde 401 sin token y 403
+por rol insuficiente sin llegar al servicio, y reenvía el token intacto; los servicios lo vuelven a
+validar. Además tiene un filtro propio, `ResumenMiembro` (`GET /api/resumen/miembros/{id}`), que
+agrega miembro, clases y pagos en una sola respuesta y, si falla clases o pagos, responde 200 con esa
+sección en `null` y una advertencia. Gateway y Eureka no son contextos de dominio: son infraestructura,
+por eso no cuentan entre los cuatro microservicios.
 
 **"¿Cómo saben qué rol tiene el usuario si Spring Security no conoce Keycloak?"**
 El JWT firmado por Keycloak trae el claim `realm_access.roles`. Configuramos un
