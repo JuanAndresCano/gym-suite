@@ -12,7 +12,7 @@ public class GatewayConfig {
 
     @Bean
     public RouteLocator equiposRoute(RouteLocatorBuilder builder,
-                                     @Value("${gateway.equipos-uri:http://localhost:8084}") String equiposUri) {
+                                     @Value("${gateway.equipos-uri:lb://equipos-service}") String equiposUri) {
         return builder.routes()
                 .route("equipos", r -> r.path("/api/equipos/**").uri(equiposUri))
                 .build();

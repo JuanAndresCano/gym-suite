@@ -16,18 +16,24 @@ spring:
         webflux:
           # Rutas declaradas en YAML. La ruta de equipos esta en GatewayConfig (Java DSL), equivalente.
           routes:
+            # lb:// = el nombre lo resuelve Eureka y el balanceador elige la instancia
             - id: miembros-pagos
-              uri: http://localhost:8081
+              uri: lb://miembros-service
               predicates:
                 - Path=/api/miembros/**,/api/pagos/**
             - id: clases
-              uri: http://localhost:8082
+              uri: lb://clases-service
               predicates:
                 - Path=/api/clases/**
             - id: entrenadores
-              uri: http://localhost:8083
+              uri: lb://entrenadores-service
               predicates:
                 - Path=/api/entrenadores/**
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka
 
 management:
   endpoints:
