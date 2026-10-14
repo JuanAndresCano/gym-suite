@@ -1,5 +1,10 @@
 # Pruebas de extremo a extremo del API Gateway (http://localhost:8085).
 # Requiere Keycloak, los servicios y el gateway corriendo. Uso:  powershell -File scripts\test-gateway.ps1
+#
+# -Degradado : corre SOLO el caso de degradacion del resumen (clases null + advertencias). Detenga antes
+#              clases-service; el resto del script necesita que este arriba.
+param([switch]$Degradado)
+
 $ErrorActionPreference = 'Stop'
 
 $kc = 'http://localhost:8080'
@@ -55,6 +60,22 @@ function Expect($nombre, $esperado, $path, $method, $rol, $body) {
 
 $manana = (Get-Date).AddDays(2).ToString("yyyy-MM-dd'T'10:00:00")
 
+if ($Degradado) {
+    Write-Host "`n== Resumen con clases-service detenido ==" -ForegroundColor Cyan
+    if (Get-NetTCPConnection -LocalPort 8082 -State Listen -ErrorAction SilentlyContinue) {
+        Write-Host "[AVISO] clases-service sigue escuchando en 8082; detengalo para este caso." -ForegroundColor Yellow
+    }
+    $r = Expect 'resumen miembro 1 con clases caido' @(200) '/api/resumen/miembros/1' 'GET' 'member' $null
+    $j = $r.Body | ConvertFrom-Json
+    Check 'clases es null' @($true) ($null -eq $j.clases) $r.Body
+    Check 'advertencias menciona las clases' @($true) (@($j.advertencias | Where-Object { $_ -match 'clases' }).Count -ge 1) $r.Body
+    Check 'miembro y pagos siguen presentes' @($true) (($null -ne $j.miembro) -and ($null -ne $j.pagos)) $r.Body
+    Write-Host ($r.Body | ConvertFrom-Json | ConvertTo-Json -Depth 6)
+    Write-Host ("`nResultado: {0} OK, {1} fallos" -f $script:ok, $script:fallos) -ForegroundColor $(if ($script:fallos) { 'Red' } else { 'Green' })
+    if ($script:fallos) { exit 1 }
+    exit 0
+}
+
 Write-Host "`n== Seguridad en el gateway ==" -ForegroundColor Cyan
 Expect 'actuator/health sin token'            @(200) '/actuator/health' 'GET' $null $null | Out-Null
 Expect 'GET /api/miembros sin token'          @(401) '/api/miembros'    'GET' $null $null | Out-Null
@@ -84,5 +105,33 @@ Expect 'member GET /api/clases'             @(200) '/api/clases' 'GET' 'member' 
 Expect 'member cancela su inscripcion'      @(200) "/api/clases/$claseId/inscripciones/1" 'DELETE' 'member' $null | Out-Null
 Expect 'trainer inscripcion (403)'          @(403) "/api/clases/$claseId/inscripciones" 'POST' 'trainer' '{"miembroId":1}' | Out-Null
 
+Write-Host "`n== Resumen de miembro (filtro ResumenMiembro) ==" -ForegroundColor Cyan
+# Inscribir al miembro 1 en la clase 1 (si ya lo estaba de una corrida anterior, no se repite)
+$clase1 = Api "$gw/api/clases/1" 'GET' (Token 'member') $null
+if ($clase1.miembrosInscritos -contains 1) {
+    Write-Host '[OK]    miembro 1 ya estaba inscrito en la clase 1' -ForegroundColor Green
+    $script:ok++
+} else {
+    Expect 'member inscribe al miembro 1 en la clase 1' @(201) '/api/clases/1/inscripciones' 'POST' 'member' '{"miembroId":1}' | Out-Null
+}
+# Pago valido (se procesa de forma asincrona por RabbitMQ)
+$pago = Expect 'member registra un pago valido' @(202) '/api/pagos' 'POST' 'member' '{"miembroId":1,"monto":120000,"concepto":"Mensualidad (test-gateway)"}'
+Start-Sleep -Seconds 2
+
+$r = Expect 'GET /api/resumen/miembros/1' @(200) '/api/resumen/miembros/1' 'GET' 'member' $null
+$resumen = $r.Body | ConvertFrom-Json
+Check 'resumen: trae el miembro 1' @(1) $resumen.miembro.id $r.Body
+Check 'resumen: al menos una clase' @($true) ($resumen.totalClases -ge 1) $r.Body
+Check 'resumen: la clase 1 incluye entrenador' @($true) (@($resumen.clases | Where-Object { $_.id -eq 1 -and $_.entrenadorNombre }).Count -eq 1) $r.Body
+Check 'resumen: incluye el pago recien hecho' @($true) (@($resumen.pagos | Where-Object { $_.id -eq ($pago.Body | ConvertFrom-Json).pagoId }).Count -eq 1) $r.Body
+Check 'resumen: totalPagado >= 120000' @($true) ($resumen.totalPagado -ge 120000) $r.Body
+Check 'resumen: sin advertencias' @(0) @($resumen.advertencias).Count $r.Body
+Write-Host ($resumen | ConvertTo-Json -Depth 6)
+
+Expect 'resumen de miembro inexistente' @(404) '/api/resumen/miembros/9999' 'GET' 'member' $null | Out-Null
+Expect 'resumen con id no numerico'     @(400) '/api/resumen/miembros/abc'  'GET' 'member' $null | Out-Null
+Expect 'resumen sin token'              @(401) '/api/resumen/miembros/1'    'GET' $null $null | Out-Null
+
 Write-Host ("`nResultado: {0} OK, {1} fallos" -f $script:ok, $script:fallos) -ForegroundColor $(if ($script:fallos) { 'Red' } else { 'Green' })
 if ($script:fallos) { exit 1 }
+Write-Host "Para el caso de degradacion: detenga clases-service y corra  scripts\test-gateway.ps1 -Degradado"

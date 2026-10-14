@@ -5,24 +5,16 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
-import org.springframework.security.oauth2.jwt.BadJwtException;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
-import reactor.core.publisher.Mono;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * falso levantado en un puerto libre. Los tokens son cadenas simples ("admin", "member", "trainer")
  * que un ReactiveJwtDecoder de prueba convierte en JWT con realm_access.roles, asi no hace falta Keycloak.
  */
+@Import(TestJwtDecoderConfig.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "eureka.client.enabled=false")
 class GatewaySecurityAndRoutingTest {
 
@@ -72,31 +65,6 @@ class GatewaySecurityAndRoutingTest {
     @AfterAll
     static void detenerBackend() {
         backend.stop(0);
-    }
-
-    @TestConfiguration
-    static class DecoderDePrueba {
-        @Bean
-        @Primary
-        ReactiveJwtDecoder jwtDecoder() {
-            return token -> switch (token) {
-                case "admin" -> Mono.just(jwt(token, "admin.test", "ROLE_ADMIN"));
-                case "member" -> Mono.just(jwt(token, "member.test", "ROLE_MEMBER"));
-                case "trainer" -> Mono.just(jwt(token, "trainer.test", "ROLE_TRAINER"));
-                case "sin-prefijo" -> Mono.just(jwt(token, "otro", "ADMIN"));
-                default -> Mono.error(new BadJwtException("token invalido"));
-            };
-        }
-
-        private static Jwt jwt(String token, String usuario, String rol) {
-            return Jwt.withTokenValue(token)
-                    .header("alg", "none")
-                    .claim("preferred_username", usuario)
-                    .claim("realm_access", Map.of("roles", List.of(rol)))
-                    .issuedAt(Instant.now())
-                    .expiresAt(Instant.now().plusSeconds(300))
-                    .build();
-        }
     }
 
     @LocalServerPort

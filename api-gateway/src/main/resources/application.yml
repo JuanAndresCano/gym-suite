@@ -29,6 +29,13 @@ spring:
               uri: lb://entrenadores-service
               predicates:
                 - Path=/api/entrenadores/**
+            # Agregacion: el filtro responde el mismo, no se reenvia a ningun backend (por eso no://op)
+            - id: resumen-miembro
+              uri: no://op
+              predicates:
+                - Path=/api/resumen/miembros/{id}
+              filters:
+                - ResumenMiembro
 
 eureka:
   client:

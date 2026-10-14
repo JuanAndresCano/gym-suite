@@ -67,6 +67,45 @@ Las rutas de YAML y la de Java DSL son equivalentes; se usan los dos estilos a p
 - Un filtro global (`RequestLoggingFilter`) registra método, path y `preferred_username`, y añade `X-Request-Id`
   a la petición hacia el servicio y a la respuesta.
 
+## Filtro de agregación `ResumenMiembro`
+
+`GET /api/resumen/miembros/{id}` (cualquier usuario autenticado) devuelve en una sola respuesta el miembro, sus clases
+y sus pagos. La ruta (`resumen-miembro` en `application.yml`, `uri: no://op`) no reenvía a ningún backend: la
+atiende `ResumenMiembroGatewayFilterFactory` (`extends AbstractGatewayFilterFactory`, se usa como `filters: - ResumenMiembro`).
+
+El filtro llama **en paralelo** (`Mono.zip`, timeout de 3 s por llamada) con un `WebClient.Builder` `@LoadBalanced`,
+reenviando el `Authorization` original, a:
+
+| Llamada | Servicio |
+|---|---|
+| `GET /api/miembros/{id}` | miembros-service |
+| `GET /api/clases` (se quedan las clases cuyo `miembrosInscritos` contiene el id) | clases-service |
+| `GET /api/miembros/{id}/pagos` | miembros-service |
+
+Se usa `JsonNode` para no duplicar los DTOs de los otros servicios. Respuesta `200`:
+
+```json
+{
+  "miembro": { "id": 1, "nombre": "Juan Perez", "email": "juan@email.com", "fechaInscripcion": "2026-10-13" },
+  "clases": [
+    { "id": 1, "nombre": "Yoga Matutino", "horario": "2026-10-14T08:00:15", "entrenadorNombre": "Carlos Rodriguez", "entrenadorEspecialidad": "Yoga" }
+  ],
+  "totalClases": 1,
+  "pagos": [ { "id": "…", "miembroId": 1, "monto": 120000.0, "concepto": "Mensualidad", "fecha": "2026-10-13T22:08:48" } ],
+  "totalPagado": 120000.0,
+  "advertencias": []
+}
+```
+
+| Situación | Respuesta |
+|---|---|
+| Miembro inexistente | `404` `{"error": "No existe el miembro con id N"}` |
+| `id` no numérico | `400` |
+| Sin token | `401` (lo corta la seguridad del gateway) |
+| Algún servicio responde `401` o `403` | se propaga ese status |
+| Falla o tarda más de 3 s la llamada de **clases** o de **pagos** | `200` con esa sección (y su total) en `null` y un texto en `advertencias` que dice qué falló |
+| Falla la llamada del **miembro** (sin respuesta / 5xx) | `503` / `502` |
+
 ## Pruebas
 
 **Automáticas** (no necesitan Keycloak ni los servicios; usan un backend falso y tokens simulados):
@@ -81,8 +120,15 @@ cd api-gateway && ./mvnw test
 powershell -File scripts\test-gateway.ps1
 ```
 
-El script pide un token a Keycloak justo antes de cada llamada (duran 300 s) y verifica 401/403 desde el gateway
-y el POST/GET de los cuatro recursos. Termina con código de salida 1 si algún caso falla.
+El script pide un token a Keycloak justo antes de cada llamada (duran 300 s) y verifica 401/403 desde el gateway,
+el POST/GET de los cuatro recursos y el resumen de miembro (inscripción, pago, 404 y 401). Termina con código de
+salida 1 si algún caso falla.
+
+Para el caso de degradación del resumen, **detenga clases-service** y corra solo ese caso:
+
+```
+powershell -File scripts\test-gateway.ps1 -Degradado
+```
 
 ## Demostrar el balanceo
 
