@@ -1,0 +1,36 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: api-gateway
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Autoconfiguracion: el decoder resuelve el issuer de forma perezosa, Keycloak no tiene que estar arriba al arrancar
+          issuer-uri: http://localhost:8080/realms/gimnasio
+  cloud:
+    gateway:
+      server:
+        webflux:
+          # Rutas declaradas en YAML. La ruta de equipos esta en GatewayConfig (Java DSL), equivalente.
+          routes:
+            - id: miembros-pagos
+              uri: http://localhost:8081
+              predicates:
+                - Path=/api/miembros/**,/api/pagos/**
+            - id: clases
+              uri: http://localhost:8082
+              predicates:
+                - Path=/api/clases/**
+            - id: entrenadores
+              uri: http://localhost:8083
+              predicates:
+                - Path=/api/entrenadores/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
