@@ -3,10 +3,14 @@ package co.analisys.miembros.service;
 import co.analisys.miembros.config.RabbitMQConfig;
 import co.analisys.miembros.exception.PagoFallidoException;
 import co.analisys.miembros.messaging.PagoMessage;
+import co.analisys.miembros.model.Pago;
+import co.analisys.miembros.repository.PagoRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
 
 /**
  * Procesa los pagos encolados en "pagos-queue". Si el pago es inválido lanza
@@ -24,12 +28,20 @@ public class PagoService {
 
     private static final Logger log = LoggerFactory.getLogger(PagoService.class);
 
+    private final PagoRepository pagoRepository;
+
+    public PagoService(PagoRepository pagoRepository) {
+        this.pagoRepository = pagoRepository;
+    }
+
     @RabbitListener(queues = RabbitMQConfig.PAGOS_QUEUE)
     public void procesarPago(PagoMessage pago) {
         if (!procesoPagoExitoso(pago)) {
             log.warn("Intento fallido al procesar el pago {} (monto={})", pago.getPagoId(), pago.getMonto());
             throw new PagoFallidoException("Fallo en el procesamiento del pago " + pago.getPagoId());
         }
+        pagoRepository.save(new Pago(pago.getPagoId(), pago.getMiembroId(), pago.getMonto(),
+                pago.getConcepto(), LocalDateTime.now()));
         log.info("Pago {} procesado exitosamente: miembro={}, monto={}, concepto={}",
                 pago.getPagoId(), pago.getMiembroId(), pago.getMonto(), pago.getConcepto());
     }
