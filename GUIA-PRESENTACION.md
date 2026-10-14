@@ -9,7 +9,7 @@ lo que pide la consigna actual del taller.
 **Infraestructura compartida** (contenedores ya existentes, solo hay que levantarlos):
 
 ```bash
-docker start biblioteca-keycloak rabbitmq
+docker start keycloak-gimnasio rabbitmq
 docker compose -f docker-compose.kafka.yml up -d
 ```
 

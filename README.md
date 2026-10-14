@@ -239,6 +239,9 @@ el JWT de Keycloak y enruta a los servicios descubiertos por **Eureka** (puerto 
 siendo accesibles en sus puertos y siguen validando el JWT por su cuenta. Detalle completo en
 [`api-gateway/README.md`](api-gateway/README.md); diagrama editable en `arquitectura-api-gateway.drawio`.
 
+- Guion de la exposición y preguntas probables: [`GUIA-API-GATEWAY.md`](GUIA-API-GATEWAY.md)
+- Presentación: [`presentacion-api-gateway.pptx`](presentacion-api-gateway.pptx)
+
 **Orden de arranque**
 
 1. Docker: Keycloak, RabbitMQ y Kafka (con Zookeeper).
