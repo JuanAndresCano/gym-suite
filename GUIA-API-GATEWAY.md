@@ -13,7 +13,7 @@ Cómo usarlo, en este orden:
 3. Practica en voz alta dos veces con el cronómetro.
 4. Repasa las **Preguntas probables**, también las de tu compañero: el profe puede preguntar cruzado.
 
-Juan Esteban entrega el repositorio y Juan Andrés verifica la demo en vivo. Cuando Juan Esteban haga el push, Juan Andrés debe hacer `git pull`, leer `api-gateway/README.md` y correr `scripts\test-gateway.ps1` una vez. Los pasos están en el checklist de abajo.
+Juan Esteban entrega el repositorio y Juan Andrés verifica la demo en vivo. Cuando Juan Esteban haga el push, Juan Andrés debe hacer `git pull`, leer `api-gateway/README.md` y correr `./scripts/demo-gateway.sh` una vez. Los pasos están en el checklist de abajo.
 
 ## Las ideas en una frase
 
@@ -120,14 +120,14 @@ Los archivos para mirar: `api-gateway/src/main/java/co/analisys/apigateway/filte
 
 ### Diapositiva 9: Demo en vivo
 
-Di cada paso en una frase y ejecútalo.
+Di cada paso en una frase y ejecútalo. Se hace con dos terminales: en la 1 corre `./scripts/demo-gateway.sh`, que levanta todo y se detiene con `>>> ENTER` entre pasos; en la 2 van los comandos curl extra de `COMANDOS-DEMO-GATEWAY.txt`, que indica en qué pausa ejecutar cada uno.
 
-1. **Eureka:** abre `http://localhost:8761` y señala los cuatro servicios y `API-GATEWAY`.
-2. **Sin token:** `GET /api/clases` por el 8085 y responde 401.
-3. **Rol insuficiente:** con el token de `member`, `POST /api/miembros` y responde 403.
-4. **Resumen:** con el token de `admin`, `GET /api/resumen/miembros/1`. Antes inscribe al miembro 1 en la clase 1 y registra un pago válido, si no, saldrán vacíos.
-5. **Balanceo:** con la segunda instancia de entrenadores en el 8093, haz varias peticiones a `/api/entrenadores` y muestra los logs de las dos.
-6. **Degradación:** apaga `clases-service` y corre `scripts\test-gateway.ps1 -Degradado`; el resumen sale con `clases: null` y una advertencia.
+1. **Eureka:** abre `http://localhost:8761` (ventana de incógnito) y señala los cuatro servicios y `API-GATEWAY`; entrenadores aparece con 2 instancias.
+2. **Sin token:** el script hace `GET /api/clases` por el 8085 y responde 401.
+3. **Rol insuficiente:** con el token de `member`, `POST /api/miembros` responde 403; con `admin`, 201. Después las cuatro rutas responden 200.
+4. **Resumen:** con el token de `member`, `GET /api/resumen/miembros/1`. El script antes inscribe al miembro 1 en la clase 1 y registra un pago válido, si no, saldrían vacíos. Con curl se muestra que esa ruta da 200 en el gateway y 404 en el servicio directo.
+5. **Balanceo:** el script hace 8 peticiones a `/api/entrenadores` y cuenta cuántas atendió cada instancia (8083 y 8093).
+6. **Degradación:** el script apaga `clases-service` y repite el resumen; sale con `clases: null` y una advertencia.
 
 **Plan B:** si algo falla en vivo, muestra la salida del script que ya corriste y el dashboard de Eureka, y di con calma qué esperabas ver.
 
@@ -187,16 +187,16 @@ Juan Esteban:
 Juan Andrés (revisa la demo en vivo):
 
 - [ ] Hacer `git pull`, leer `api-gateway/README.md` y entender el filtro con los cinco pasos de arriba.
-- [ ] Correr el script una vez y también `scripts\test-gateway.ps1 -Degradado` con `clases-service` apagado.
+- [ ] Correr `./scripts/demo-gateway.sh` una vez completo (tarda unos 3 minutos en arrancar) y repasar `COMANDOS-DEMO-GATEWAY.txt`. Opcional: `scripts\test-gateway.ps1`.
 
 Los dos, el día de la exposición:
 
 - [ ] `docker ps` debe mostrar `keycloak-gimnasio`, `rabbitmq`, `gym-suite-zookeeper-1` y `gym-suite-kafka-1`. Si Kafka cae porque Zookeeper aún no estaba listo, basta con volver a arrancarlo.
-- [ ] Arrancar en este orden: Keycloak, RabbitMQ y Kafka; luego `eureka-server`; luego los 4 servicios; al final `api-gateway`.
-- [ ] Esperar 30 a 60 segundos y confirmar en `http://localhost:8761` que están los 4 servicios y `API-GATEWAY`.
-- [ ] Dejar lista, en otra terminal, la segunda instancia de entrenadores: en `entrenadores-service`, `mvnw.cmd spring-boot:run "-Dspring-boot.run.arguments=--server.port=8093"`.
-- [ ] Pedir los tokens justo antes de cada uso: duran 300 segundos. No generarlos con anticipación.
-- [ ] Tener abiertas las diapositivas, este guion y una terminal con el script, y decidir de antemano quién teclea en la demo.
+- [ ] Antes de empezar: `./scripts/demo-gateway.sh --detener` y luego `./scripts/demo-gateway.sh`. El script levanta Keycloak, RabbitMQ y Kafka con Docker, Eureka, los 4 servicios, el gateway y la segunda instancia de entrenadores (8093); no hay que arrancar nada a mano.
+- [ ] Esperar a que llegue a la primera pausa `>>> ENTER` (incluye 40 s de espera del registro de Eureka) y confirmar en `http://localhost:8761` que están los servicios y `API-GATEWAY`.
+- [ ] Abrir una segunda terminal y pegar la función `tok` de `COMANDOS-DEMO-GATEWAY.txt`.
+- [ ] Los tokens duran 300 segundos: la función `tok` pide uno nuevo en cada comando, no generarlos con anticipación.
+- [ ] Tener abiertas las diapositivas, este guion y dos terminales (script y comandos), y decidir de antemano quién teclea en la demo.
 - [ ] Ensayo completo con cronómetro, al menos una vez.
 
 ## Datos clave para saberse de memoria
@@ -220,4 +220,4 @@ Los dos, el día de la exposición:
 | Respuestas del resumen | 404 miembro inexistente, 400 id no numérico, 503 o 502 si cae el miembro, 200 con `null` y `advertencias` si cae clases o pagos |
 | Vida del token | 300 segundos |
 | Espera tras arrancar | 30 a 60 segundos hasta que el gateway ve los servicios |
-| Pruebas | Script `test-gateway.ps1` con 33 casos; 16 pruebas JUnit en el gateway |
+| Pruebas | `demo-gateway.sh` (demo guiada) y `test-gateway.ps1` con 33 casos; 16 pruebas JUnit en el gateway |

@@ -1,0 +1,119 @@
+COMANDOS PARA LA DEMO DEL API GATEWAY
+=====================================
+
+Se usan DOS terminales en la carpeta gym-suite:
+  TERMINAL 1: corre el script de la demo y avanza con ENTER.
+  TERMINAL 2: aqui van los comandos extra, cuando el script este esperando.
+
+Idea para decir al inicio: todo entra por el gateway (puerto 8085). Nunca se llama
+a un servicio directo (8081 a 8084).
+
+
+ANTES DE EMPEZAR (una vez, antes de la exposicion)
+--------------------------------------------------
+Terminal 1:
+    ./scripts/demo-gateway.sh --detener
+    ./scripts/demo-gateway.sh
+
+  Tarda unos 3 minutos (arranque + 40 s de espera de Eureka). Deja que llegue
+  a la primera pausa ">>> ENTER" (DEMO 1) antes de empezar a hablar.
+
+Terminal 2 (pegar esto una sola vez; define "tok" para pedir tokens frescos,
+los tokens duran 5 minutos):
+
+    tok() { curl -s -X POST http://localhost:8080/realms/gimnasio/protocol/openid-connect/token -d "grant_type=password&client_id=miembros-service&client_secret=miembros-service-secret&username=$1&password=$2" | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])"; }
+    GW=http://localhost:8085
+
+Navegador: abrir http://localhost:8761 (usar ventana de incognito).
+
+
+MOMENTO 1: el script muestra "DEMO 1 -- Eureka" y espera ENTER
+-------------------------------------------------------------
+Mostrar el dashboard en el navegador: http://localhost:8761
+  - Deben verse API-GATEWAY, MIEMBROS-SERVICE, CLASES-SERVICE, EQUIPOS-SERVICE
+    y ENTRENADORES-SERVICE con 2 instancias.
+Decir: el gateway no tiene IPs fijas, descubre los servicios por nombre (lb://).
+No hay comandos extra. Pulsar ENTER.
+
+
+MOMENTO 2: el script muestra "DEMO 2 -- Sin token" y espera ENTER
+-----------------------------------------------------------------
+Terminal 2, mostrar que el gateway rechaza a quien no trae token:
+
+    curl -i -X POST $GW/api/miembros -H "Content-Type: application/json" -d '{"nombre":"X","email":"x@email.com"}'
+
+  -> HTTP 401 con "WWW-Authenticate: Bearer". Pulsar ENTER.
+
+
+MOMENTO 3: el script muestra "DEMO 3 -- Rol insuficiente" y espera ENTER
+------------------------------------------------------------------------
+Terminal 2, mismo POST con el token de admin (crea el miembro):
+
+    curl -i -X POST $GW/api/miembros -H "Authorization: Bearer $(tok admin.test 'Admin123!')" -H "Content-Type: application/json" -d '{"nombre":"Prueba Curl","email":"curl@email.com"}'
+
+  -> HTTP 201 y un header X-Request-Id (lo agrega el gateway).
+  (El script tambien muestra las 4 rutas, incluida /api/equipos, respondiendo 200.)
+
+Mostrar que el gateway sabe quien llamo (mismo id que el header):
+
+    grep "usuario=" logs/gateway.log | tail -3
+
+  -> "POST /api/miembros usuario=admin.test". Pulsar ENTER.
+
+
+MOMENTO 4: el script muestra el JSON de "DEMO 4 -- Filtro de agregacion" y espera ENTER
+----------------------------------------------------------------------------------------
+Terminal 2, la ruta del resumen existe SOLO en el gateway:
+
+    curl -s -o /dev/null -w "gateway: %{http_code}\n" $GW/api/resumen/miembros/1 -H "Authorization: Bearer $(tok member.test 'Member123!')"
+    curl -s -o /dev/null -w "servicio directo: %{http_code}\n" http://localhost:8081/api/resumen/miembros/1 -H "Authorization: Bearer $(tok member.test 'Member123!')"
+
+  -> gateway: 200, servicio directo: 404. Esa respuesta la arma el filtro
+     ResumenMiembro con datos de miembros-service y clases-service.
+Pulsar ENTER.
+
+
+MOMENTO 5: el script muestra "DEMO 5 -- Balanceo de carga" y espera ENTER
+-------------------------------------------------------------------------
+El script ya hizo 8 peticiones y mostro cuantas atendio cada instancia.
+Si el conteo salio raro, repetirlo a mano en la Terminal 2:
+
+    TK=$(tok member.test 'Member123!'); for i in $(seq 1 8); do curl -s -o /dev/null -w "%{http_code} " $GW/api/entrenadores -H "Authorization: Bearer $TK"; done; echo
+    grep -c 'GET "/api/entrenadores"' logs/entrenadores.log logs/entrenadores-2.log
+
+  -> reparto parejo entre la instancia 8083 y la 8093 (round-robin).
+     Los conteos incluyen peticiones anteriores; lo importante es que ambos suben.
+Pulsar ENTER.
+
+
+MOMENTO 6: el script muestra "DEMO 6 -- Degradacion" y TERMINA
+--------------------------------------------------------------
+El script ya apago clases-service y mostro el resumen con "clases": null y una
+advertencia. Decir: el gateway no devuelve error, responde con lo que puede.
+
+Cuando el script ya termino (aparece "FIN"), prueba extra para demostrar que la
+seguridad se decide en el gateway antes de reenviar. Apagar miembros-service:
+
+    pkill -f "miembros-service/target/miembros-service"; sleep 3
+
+    curl -s -o /dev/null -w "member (sin permiso), servicio caido: %{http_code}\n" -X POST $GW/api/miembros -H "Authorization: Bearer $(tok member.test 'Member123!')" -H "Content-Type: application/json" -d '{"nombre":"X","email":"x@email.com"}'
+    curl -s -o /dev/null -w "admin (con permiso), servicio caido: %{http_code}\n" -X POST $GW/api/miembros -H "Authorization: Bearer $(tok admin.test 'Admin123!')" -H "Content-Type: application/json" -d '{"nombre":"X","email":"x@email.com"}'
+
+  -> member: 403 (lo rechaza el gateway sin buscar el servicio).
+  -> admin: 500 (paso la autorizacion y el gateway intento reenviar a un
+     servicio caido: "Connection refused" en el log del gateway).
+  Si preguntan por el 500: el gateway no convierte fallos de conexion en 502/503;
+  es una mejora posible, no es parte del enunciado.
+
+
+AL TERMINAR
+-----------
+    ./scripts/demo-gateway.sh --detener
+
+
+SI ALGO FALLA (plan B)
+----------------------
+  - Mostrar la salida que ya tengas en pantalla y el dashboard de Eureka.
+  - Un token da 401 de repente: expiro (5 min). Los comandos de arriba piden uno
+    nuevo cada vez con tok, asi que basta repetir el comando.
+  - Logs: logs/gateway.log, logs/miembros.log, logs/clases.log, logs/eureka.log

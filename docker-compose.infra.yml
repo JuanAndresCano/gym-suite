@@ -1,0 +1,25 @@
+# Keycloak (con el realm "gimnasio" ya importado) y RabbitMQ. Kafka esta en docker-compose.kafka.yml.
+#   docker compose -f docker-compose.infra.yml up -d
+# Keycloak tarda ~30-60 s en estar listo: http://localhost:8080/realms/gimnasio
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.3
+    container_name: keycloak-gimnasio
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports:
+      - 8080:8080
+    volumes:
+      - ./keycloak-realm-gimnasio.json:/opt/keycloak/data/import/keycloak-realm-gimnasio.json:ro
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: gimnasio
+      RABBITMQ_DEFAULT_PASS: gimnasio123
+    ports:
+      - 5672:5672
+      - 15672:15672

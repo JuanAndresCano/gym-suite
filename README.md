@@ -7,6 +7,41 @@ microservicios aplicando Domain-Driven Design.
 
 ---
 
+## Probar el API Gateway (empieza aquí)
+
+Un solo script levanta todo y recorre la demo del API Gateway paso a paso (pide ENTER entre pasos):
+
+```bash
+./scripts/demo-gateway.sh --detener   # por si quedó algo corriendo de antes
+./scripts/demo-gateway.sh
+```
+
+**Requisitos:** Docker, Java 21, `curl` y `python3`, en Linux, macOS o WSL. El script levanta con Docker
+Keycloak (realm `gimnasio` ya importado), RabbitMQ y Kafka ([`docker-compose.infra.yml`](docker-compose.infra.yml)
+y [`docker-compose.kafka.yml`](docker-compose.kafka.yml)), compila lo que falte y arranca Eureka, los 4 servicios,
+el gateway y una segunda instancia de entrenadores. La primera vez tarda varios minutos (descarga de imágenes y
+compilación). Para apagar todo: `./scripts/demo-gateway.sh --detener`.
+
+**Qué demuestra** (todo entra por el gateway, `http://localhost:8085`):
+
+| Paso | Muestra |
+|---|---|
+| 1 | Eureka: los servicios se registran y el gateway los descubre por nombre (`lb://`) |
+| 2 | Sin token: **401** del gateway |
+| 3 | Rol insuficiente: **403**; con admin **201**; las 4 rutas responden **200** |
+| 4 | Filtro de agregación `ResumenMiembro`: miembro + clases + pagos en una sola llamada |
+| 5 | Balanceo de carga: reparto entre dos instancias de `entrenadores-service` |
+| 6 | Degradación: con `clases-service` caído el resumen responde igual, con `clases: null` y una advertencia |
+
+Comandos extra para mostrar con curl en cada pausa: [`COMANDOS-DEMO-GATEWAY.txt`](COMANDOS-DEMO-GATEWAY.txt).
+Detalle técnico del gateway: [`api-gateway/README.md`](api-gateway/README.md).
+
+> **Sobre los demás scripts de `scripts/`:** son de entregas anteriores (seguridad, mensajería y resiliencia de los
+> 4 servicios) y se conservan. Para el API Gateway basta `demo-gateway.sh`. `test-gateway.ps1` es una
+> verificación automática equivalente para PowerShell, con aciertos y fallos por caso.
+
+---
+
 ## 1. Análisis del dominio
 
 El monolito original agrupaba en una sola aplicación, una sola base de datos y un
@@ -242,7 +277,7 @@ siendo accesibles en sus puertos y siguen validando el JWT por su cuenta. Detall
 - Guion de la exposición y preguntas probables: [`GUIA-API-GATEWAY.md`](GUIA-API-GATEWAY.md)
 - Presentación: [`presentacion-api-gateway.pptx`](presentacion-api-gateway.pptx)
 
-**Orden de arranque**
+**Orden de arranque (manual).** `./scripts/demo-gateway.sh` ya hace todo esto solo; esta es la alternativa a mano:
 
 1. Docker: Keycloak, RabbitMQ y Kafka (con Zookeeper).
 2. `eureka-server`
@@ -274,7 +309,7 @@ Dashboard de Eureka: <http://localhost:8761>.
 sus pagos, `totalClases`, `totalPagado` y una lista `advertencias`. Si fallan las clases o los pagos responde `200`
 con esa sección en `null` y la advertencia correspondiente; un miembro inexistente da `404`.
 
-**Pruebas end-to-end** (PowerShell, con todo arriba, desde la raíz del repo):
+**Pruebas end-to-end** (alternativa a `demo-gateway.sh`; PowerShell, con todo arriba, desde la raíz del repo):
 
 ```
 powershell -File scripts\test-gateway.ps1
@@ -317,6 +352,7 @@ Con los cuatro servicios corriendo simultáneamente (`./scripts/probar-todo.sh`)
 
 | Script | Qué hace |
 |---|---|
+| `./scripts/demo-gateway.sh` | **API Gateway:** levanta todo (Docker, Eureka, servicios, gateway) y corre la demo; `--detener` apaga todo |
 | `./scripts/levantar-todo.sh` | Compila lo que falte y arranca los 4 servicios en segundo plano (no incluye Eureka ni el gateway) |
 | `./scripts/probar-todo.sh` | Batería completa, incluidos los invariantes |
 | `./scripts/probar-resiliencia.sh` | Apaga entrenadores y prueba que Clases sobrevive |

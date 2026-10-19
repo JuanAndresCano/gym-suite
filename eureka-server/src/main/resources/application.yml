@@ -1,5 +1,7 @@
 server:
   port: 8761
+  # Las cookies de Keycloak (mismo host, otro puerto) llegan a Eureka y superan los 8 KB por defecto -> 400
+  max-http-request-header-size: 64KB
 
 spring:
   application:

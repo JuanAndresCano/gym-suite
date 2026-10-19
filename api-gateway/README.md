@@ -5,6 +5,18 @@ aplica la autorización por rol y enruta hacia los microservicios descubiertos c
 
 **Stack:** Java 21 · Spring Boot 4.1.1 · Spring Cloud 2025.1.2 (Oakwood) · `spring-cloud-starter-gateway-server-webflux`
 
+## Cómo probarlo (rápido)
+
+Desde la raíz del repo, un solo script levanta todo (Docker, Eureka, servicios, gateway) y corre la demo con pausas:
+
+```bash
+./scripts/demo-gateway.sh --detener
+./scripts/demo-gateway.sh
+```
+
+Comandos curl para cada paso: [`COMANDOS-DEMO-GATEWAY.txt`](../COMANDOS-DEMO-GATEWAY.txt). Más abajo está el detalle
+de rutas, seguridad y filtro, y el arranque manual.
+
 ## Puertos
 
 | Componente | Puerto |
